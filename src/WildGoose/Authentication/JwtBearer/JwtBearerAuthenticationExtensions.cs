@@ -1,8 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Protocols;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 
 namespace WildGoose.Authentication.JwtBearer;
@@ -13,13 +11,13 @@ public static class JwtBearerAuthenticationExtensions
         AuthenticationBuilder builder,
         IConfiguration configuration, string apiName)
     {
-        var jwtBearerOptions = configuration.GetSection("JwtBearer").Get<JwtBearerSettings>();
-        if (jwtBearerOptions == null)
+        var jwtBearerSettings = configuration.GetSection("JwtBearer").Get<JwtBearerSettings>();
+        if (jwtBearerSettings == null)
         {
             throw new ArgumentException("JwtBearer options not found in the configuration file.");
         }
 
-        var rsaSecurityKey = RsaSecurityKeyHelper.GetRsaSecurityKey(jwtBearerOptions.KeyPath);
+        var rsaSecurityKey = RsaSecurityKeyHelper.GetRsaSecurityKey(jwtBearerSettings.KeyPath);
         if (rsaSecurityKey != null)
         {
             services.AddKeyedSingleton("JwtBearerRsaSecurityKey", rsaSecurityKey);
@@ -27,8 +25,8 @@ public static class JwtBearerAuthenticationExtensions
 
         builder.AddJwtBearer("JwtBearer", options =>
         {
-            // 1. 不要设置 Authority！
-            options.Authority = null;
+            // 1. 设置 Authority
+            options.Authority = jwtBearerSettings.Authority;
 
             // 2. 手动设置元数据地址（或直接给密钥）
             if (rsaSecurityKey != null)
@@ -40,7 +38,10 @@ public static class JwtBearerAuthenticationExtensions
             else
             {
                 // 手动设置元数据地址
-                options.MetadataAddress = jwtBearerOptions.GetMetadataAddress();
+                if (jwtBearerSettings.MetadataAddress != null)
+                {
+                    options.MetadataAddress = jwtBearerSettings.MetadataAddress;
+                }
             }
 
             options.Audience = apiName;
@@ -56,20 +57,14 @@ public static class JwtBearerAuthenticationExtensions
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 // Aud 验证
-                ValidateAudience = jwtBearerOptions.ValidateAudience,
+                ValidateAudience = jwtBearerSettings.ValidateAudience,
                 // 开启 Issuer 验证
-                ValidateIssuer = jwtBearerOptions.ValidateIssuer,
-                ValidIssuer = jwtBearerOptions.ValidIssuer,
+                ValidateIssuer = jwtBearerSettings.ValidateIssuer,
+                ValidIssuer = jwtBearerSettings.ValidIssuer,
                 // 验证过期
-                ValidateLifetime = jwtBearerOptions.ValidateLifetime
+                ValidateLifetime = jwtBearerSettings.ValidateLifetime
             };
 
-            var metadataAddress = jwtBearerOptions.GetMetadataAddress();
-            options.ConfigurationManager = new ConfigurationManager<OpenIdConnectConfiguration>(
-                metadataAddress,
-                new OpenIdConnectConfigurationRetriever(),
-                new HttpDocumentRetriever(new HttpClient(new HttpClientProxy()))
-            );
             // 关键2：Token解析完成后，拦截拆分scope为多条Claim
             options.Events.OnTokenValidated = ctx =>
             {
@@ -115,41 +110,25 @@ public static class JwtBearerAuthenticationExtensions
         public string? MetadataAddress { get; set; }
         public string? KeyPath { get; set; }
 
-        /// <summary>
-        /// Authority: https  && RequireHttpsMetadata: true ->  MetadataAddress: ""
-        /// Authority: https  && RequireHttpsMetadata: false ->  MetadataAddress: "http://"
-        /// Authority: http  && RequireHttpsMetadata: true ->  MetadataAddress: ""
-        /// Authority: http  && RequireHttpsMetadata: true ->  MetadataAddress: "http://"
-        /// </summary>
-        /// <returns></returns>
-        public string GetMetadataAddress()
-        {
-            if (string.IsNullOrEmpty(MetadataAddress) &&
-                !string.IsNullOrEmpty(Authority))
-            {
-                var authority = Authority.Replace("http://", string.Empty).Replace("https://", string.Empty)
-                    .TrimEnd("/");
-                var schema = RequireHttpsMetadata ? "https" : "http";
-                return $"{schema}://{authority}/.well-known/openid-configuration";
-            }
-
-            throw new ArgumentException("Authority or MetadataAddress cannot be null or empty.");
-        }
-    }
-
-    class HttpClientProxy : HttpClientHandler
-    {
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-            CancellationToken cancellationToken)
-        {
-            var response = await base.SendAsync(request, cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                return response;
-            }
-
-            throw new HttpRequestException(
-                $"Request: {request.RequestUri}, status code: {response.StatusCode}, response: {await response.Content.ReadAsStringAsync(cancellationToken)}");
-        }
+        // /// <summary>
+        // /// Authority: https  && RequireHttpsMetadata: true ->  MetadataAddress: ""
+        // /// Authority: https  && RequireHttpsMetadata: false ->  MetadataAddress: "http://"
+        // /// Authority: http  && RequireHttpsMetadata: true ->  MetadataAddress: ""
+        // /// Authority: http  && RequireHttpsMetadata: true ->  MetadataAddress: "http://"
+        // /// </summary>
+        // /// <returns></returns>
+        // public string GetMetadataAddress()
+        // {
+        //     if (string.IsNullOrEmpty(MetadataAddress) &&
+        //         !string.IsNullOrEmpty(Authority))
+        //     {
+        //         var authority = Authority.Replace("http://", string.Empty).Replace("https://", string.Empty)
+        //             .TrimEnd("/");
+        //         var schema = RequireHttpsMetadata ? "https" : "http";
+        //         return $"{schema}://{authority}/.well-known/openid-configuration";
+        //     }
+        //
+        //     throw new ArgumentException("Authority or MetadataAddress cannot be null or empty.");
+        // }
     }
 }
