@@ -11,6 +11,8 @@
 yarn.lock
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
+.omo/
+.opencode/
 
 # customize 
 .DS_Store

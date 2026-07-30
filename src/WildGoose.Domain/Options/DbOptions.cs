@@ -6,6 +6,8 @@ public class DbOptions
     public bool UseUnderScoreCase { get; set; }
     public required string ConnectionString { get; set; }
     public required string DatabaseType { get; set; }
+    public int? Major { get; set; }
+    public int? Minor { get; set; }
     public bool EnableSensitiveDataLogging { get; set; }
     public required bool AutoMigrationEnabled { get; set; }
     public Dictionary<string, string> TableMapper { get; set; }

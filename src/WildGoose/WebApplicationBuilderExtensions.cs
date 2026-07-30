@@ -160,6 +160,7 @@ public static class WebApplicationBuilderExtensions
                                        "Connection string 'DbContext:ConnectionString' not found.");
             var tablePrefix = dbOptions.TablePrefix;
             var databaseType = dbOptions.DatabaseType;
+
             if ("mysql".Equals(databaseType, StringComparison.OrdinalIgnoreCase))
             {
                 builder.Services.AddDbContextPool<WildGooseDbContext>(options =>
@@ -174,7 +175,7 @@ public static class WebApplicationBuilderExtensions
                         warnings.Ignore(RelationalEventId.PendingModelChangesWarning);
                     });
 
-                    options.UseMySql(connectionString, new MySqlServerVersion(new Version(8, 0, 29)),
+                    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString),
                         b => { b.MigrationsHistoryTable($"{tablePrefix}migrations_history"); });
                     options.ReplaceService<IMigrationsSqlGenerator, MySqlPrefixedMigrationsSqlGenerator>();
                 });
@@ -193,7 +194,19 @@ public static class WebApplicationBuilderExtensions
                         warnings.Ignore(RelationalEventId.PendingModelChangesWarning);
                     });
                     options.UseNpgsql(connectionString,
-                        b => { b.MigrationsHistoryTable($"{tablePrefix}migrations_history"); });
+                        b =>
+                        {
+                            var version = dbOptions is { Major: not null, Minor: not null }
+                                ? new Version(dbOptions.Major.Value, dbOptions.Minor.Value)
+                                : null;
+
+                            if (version != null)
+                            {
+                                b.SetPostgresVersion(version);
+                            }
+
+                            b.MigrationsHistoryTable($"{tablePrefix}migrations_history");
+                        });
                     options.ReplaceService<IMigrationsSqlGenerator, NpgsqlPrefixedMigrationsSqlGenerator>();
                 });
             }
