@@ -508,12 +508,13 @@ public class OrganizationAdminService(
         }
 
         var adminList = await GetAdminOrganizationsAsync(Session.UserId);
-        var parentOrganization = await GetOrganizationAsync(query.ParentId);
 
-        if (!CanManageAll(adminList, [parentOrganization]))
-        {
-            throw WildGooseFriendlyException.From(ErrorCodes.Forbidden, "没有管理机构的权限");
-        }
+        // comments by lewis at 2026-08-21: 返回的信息没有什么敏感信息，同组织下机构信息应该共享（后续可以考虑隐藏）
+        // if (!CanManageAll(adminList, [parentOrganization]))
+        // {
+        //     throw WildGooseFriendlyException.From(ErrorCodes.Forbidden, "没有管理机构的权限");
+        // }
+        // var parentOrganization = await GetOrganizationAsync(query.ParentId);
 
         var adminOrganizationPathList = adminList.Select(x => x.Path).ToList();
         var all = DbContext.Set<OrganizationDetail>()
